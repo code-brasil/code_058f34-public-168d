@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Jogo da Velha</title>
+  <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
+  <style>
+    .cell { width: 60px; height: 60px; border: 1px solid #000; display: flex; align-items: center; justify-content: center; font-size: 2rem; cursor: pointer; }
+    .board { display: grid; grid-template-columns: repeat(3, 60px); grid-template-rows: repeat(3, 60px); gap: 0; margin: 20px auto; }
+  </style>
+</head>
+<body class="bg-blue-50 flex flex-col items-center justify-center min-h-screen">
+  <h1 class="text-2xl font-bold mb-4">Jogo da Velha Multiplayer</h1>
+  <div id="status" class="mb-4 text-lg">Carregando partida...</div>
+  <div id="board" class="board"></div>
+  <div id="timer" class="mt-4 text-xl"></div>
+  <script>
+    const projectId = 'code_058f34';
+    let gameId = localStorage.getItem('game_id');
+    let timerInterval;
+    let turnTime = 10; // 10 segundos por turno
+
+    // Inicializa o tabuleiro
+    function createBoard(boardStr) {
+      const boardDiv = document.getElementById('board');
+      boardDiv.innerHTML = '';
+      for(let i=0; i<9; i++){
+        const cell = document.createElement('div');
+        cell.className = 'cell';
+        cell.dataset.index = i;
+        cell.innerText = boardStr[i] === ' ' ? '' : boardStr[i];
+        cell.addEventListener('click', () => makeMove(i));
+        boardDiv.appendChild(cell);
+      }
+    }
+
+    function getAuthToken() {
+      return localStorage.getItem('token');
+    }
+
+    async function fetchGameStatus(){
+      const token = getAuthToken();
+      const response = await fetch(`https://api.greb.com.br/functions/${projectId}/process`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ action: 'status', game_id: gameId })
+      });
+      const data = await response.json();
+      if(data.game){
+        document.getElementById('status').innerText = data.message || '';
+        createBoard(data.game.board);
+      }
+      if(data.game && data.game.status === 'finished'){
+        clearInterval(timerInterval);
+        alert(data.message || 'Partida finalizada');
+      }
+    }
+
+    async function makeMove(position){
+      const token = getAuthToken();
+      const response = await fetch(`https://api.greb.com.br/functions/${projectId}/process`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'Authorization': 'Bearer ' + token
+        },
+        body: JSON.stringify({ action: 'move', game_id: gameId, position: position })
+      });
+      const data = await response.json();
+      if(data.error) {
+        alert(data.error);
+      } else {
+        // Atualiza o tabuleiro
+        createBoard(data.game.board);
+        document.getElementById('status').innerText = data.message || '';
+      }
+    }
+
+    // Contador de turno
+    function startTimer(){
+      let timeLeft = turnTime;
+      document.getElementById('timer').innerText = 'Tempo restante: ' + timeLeft + 's';
+      timerInterval = setInterval(() => {
+        timeLeft--;
+        document.getElementById('timer').innerText = 'Tempo restante: ' + timeLeft + 's';
+        if(timeLeft <= 0){
+          clearInterval(timerInterval);
+          alert('Tempo esgotado! Turno perdido.');
+          // Aqui poderia enviar uma ação para trocar o turno automaticamente
+        }
+      }, 1000);
+    }
+
+    // Inicia polling do status do jogo
+    window.onload = function(){
+      fetchGameStatus();
+      startTimer();
+      setInterval(fetchGameStatus, 3000);
+    };
+  </script>
+</body>
+</html>
